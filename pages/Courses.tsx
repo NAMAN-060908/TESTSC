@@ -4,23 +4,66 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ProgramTier, Course } from '../types';
 import { TIER_INFO } from '../constants';
-import { Clock, CheckCircle2, Star, Zap, ChevronRight, X, CreditCard, Lock, ShieldCheck, Info } from 'lucide-react';
+import { Clock, CheckCircle2, Zap, ChevronRight, X, CreditCard, Lock, ShieldCheck, Info } from 'lucide-react';
 
 const CheckoutModal = ({ course, onClose }: { course: Course, onClose: () => void }) => {
   const { enroll, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [cardDetails, setCardDetails] = useState({
+    number: '4242 4242 4242 4242',
+    expiry: '12/28',
+    cvc: '123',
+  });
 
-  const handlePayment = () => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCardDetails(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePayment = async () => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
+
+    if (!cardDetails.number.trim() || !cardDetails.expiry.trim() || !cardDetails.cvc.trim()) {
+      setError('Please fill in all card details.');
+      return;
+    }
+    setError('');
     setLoading(true);
-    // Mock processing delay
+
+    // --- REAL PAYMENT INTEGRATION WOULD HAPPEN HERE ---
+    // 1. You would use a library like Stripe.js to create a secure payment token
+    //    from the card details. You NEVER send raw card details to your own server.
+    //
+    //    const { token, error } = await stripe.createToken(cardElement);
+    //
+    // 2. If there's an error from Stripe (e.g., invalid card), you'd show it.
+    //    if (error) {
+    //      setError(error.message);
+    //      setLoading(false);
+    //      return;
+    //    }
+    //
+    // 3. Send the 'token.id' to your backend server for processing.
+    //    const response = await fetch('/api/charge', {
+    //      method: 'POST',
+    //      headers: { 'Content-Type': 'application/json' },
+    //      body: JSON.stringify({ token: token.id, courseId: course.id }),
+    //    });
+    //
+    // 4. Your backend would use its secret key to charge the card via the Stripe API.
+    //    If the charge is successful, it would enroll the user and return success.
+    
+    // For now, we'll just simulate the delay and success.
+    console.log("Simulating payment processing for course:", course.title);
     setTimeout(() => {
       setLoading(false);
+      // On successful payment from your backend, you would proceed to the next step.
       setStep(3);
     }, 2000);
   };
@@ -34,17 +77,21 @@ const CheckoutModal = ({ course, onClose }: { course: Course, onClose: () => voi
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-secondary/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-xl rounded-[40px] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-300">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-secondary bg-slate-50 rounded-full transition-colors"><X size={20} /></button>
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-secondary bg-slate-50 rounded-full transition-colors z-[210]"><X size={20} /></button>
         
         <div className="p-8 md:p-12">
           {step === 1 && (
-            <div>
+            <div className="animate-in fade-in slide-in-from-bottom-2">
               <div className="flex items-center gap-3 mb-8">
                 <div className="bg-primary/10 text-primary p-3 rounded-2xl"><ShieldCheck size={28} /></div>
                 <div>
-                  <h2 className="text-2xl font-black text-secondary tracking-tight">Checkout</h2>
+                  <h2 className="text-2xl font-black text-secondary tracking-tight uppercase">Checkout</h2>
                   <p className="text-slate-400 text-sm font-medium">Secure enrollment for {course.title}</p>
                 </div>
+              </div>
+              
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 p-4 rounded-2xl text-xs font-bold text-center mb-6">
+                This is a demo checkout. Do not use real credit card information.
               </div>
 
               <div className="bg-slate-50 rounded-2xl p-6 mb-8">
@@ -61,16 +108,18 @@ const CheckoutModal = ({ course, onClose }: { course: Course, onClose: () => voi
                 </div>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="space-y-4 mb-6">
                 <div className="relative">
                   <CreditCard size={18} className="absolute left-4 top-4 text-slate-400" />
-                  <input type="text" placeholder="Card Number" className="w-full bg-slate-100 border-0 rounded-xl p-4 pl-12 focus:ring-2 focus:ring-primary outline-none text-sm" defaultValue="4242 4242 4242 4242" />
+                  <input type="text" placeholder="Card Number" name="number" value={cardDetails.number} onChange={handleInputChange} className="w-full bg-slate-100 border-0 rounded-xl p-4 pl-12 focus:ring-2 focus:ring-primary outline-none text-sm" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                   <input type="text" placeholder="MM/YY" className="w-full bg-slate-100 border-0 rounded-xl p-4 focus:ring-2 focus:ring-primary outline-none text-sm" defaultValue="12/28" />
-                   <input type="text" placeholder="CVC" className="w-full bg-slate-100 border-0 rounded-xl p-4 focus:ring-2 focus:ring-primary outline-none text-sm" defaultValue="123" />
+                   <input type="text" placeholder="MM/YY" name="expiry" value={cardDetails.expiry} onChange={handleInputChange} className="w-full bg-slate-100 border-0 rounded-xl p-4 focus:ring-2 focus:ring-primary outline-none text-sm" />
+                   <input type="text" placeholder="CVC" name="cvc" value={cardDetails.cvc} onChange={handleInputChange} className="w-full bg-slate-100 border-0 rounded-xl p-4 focus:ring-2 focus:ring-primary outline-none text-sm" />
                 </div>
               </div>
+              
+              {error && <p className="text-red-500 text-xs text-center mb-4 font-bold">{error}</p>}
 
               <button 
                 onClick={handlePayment} 
@@ -86,7 +135,7 @@ const CheckoutModal = ({ course, onClose }: { course: Course, onClose: () => voi
           )}
 
           {step === 3 && (
-            <div className="text-center py-10">
+            <div className="text-center py-10 animate-in zoom-in-95">
               <div className="w-24 h-24 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-8 animate-bounce">
                 <CheckCircle2 size={48} />
               </div>
@@ -114,13 +163,17 @@ const Courses: React.FC = () => {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const tiers = Object.values(ProgramTier);
 
+  const handleCourseClick = (course: Course) => {
+    setSelectedCourse(course);
+  };
+
   return (
     <div className="pb-32 bg-surface min-h-screen pt-24">
       {selectedCourse && <CheckoutModal course={selectedCourse} onClose={() => setSelectedCourse(null)} />}
 
       {/* Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-16 text-center">
-         <h1 className="text-5xl md:text-7xl font-black text-secondary tracking-tighter mb-6">Circuit Paths</h1>
+         <h1 className="text-5xl md:text-7xl font-black text-secondary tracking-tighter mb-6 uppercase">Circuit Paths</h1>
          <p className="text-slate-500 max-w-2xl mx-auto font-medium text-lg leading-relaxed">
            Choose the intensity that matches your ambition. From foundational sprints to career-guaranteed transformations.
          </p>
@@ -151,7 +204,7 @@ const Courses: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h2 className="text-3xl font-black text-secondary tracking-tight">{activeTier} Journeys</h2>
+            <h2 className="text-3xl font-black text-secondary tracking-tight uppercase">{activeTier} Journeys</h2>
             <p className="text-slate-400 text-sm font-medium">{TIER_INFO[activeTier]?.description}</p>
           </div>
           <div className="bg-primary/5 text-primary px-4 py-2 rounded-lg flex items-center gap-2 text-xs font-bold">
@@ -163,7 +216,8 @@ const Courses: React.FC = () => {
           {courses.filter(c => c.tier === activeTier).map((course) => (
             <div 
               key={course.id} 
-              className="bg-white rounded-[40px] overflow-hidden border border-slate-100 hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 group flex flex-col"
+              onClick={() => handleCourseClick(course)}
+              className="bg-white rounded-[40px] overflow-hidden border border-slate-100 hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 group flex flex-col cursor-pointer transform hover:-translate-y-2"
             >
               <div className="h-64 relative overflow-hidden">
                 <img src={course.image} alt={course.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
@@ -191,8 +245,11 @@ const Courses: React.FC = () => {
                 </div>
 
                 <button 
-                  onClick={() => setSelectedCourse(course)}
                   className="w-full py-5 rounded-2xl bg-secondary text-white font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 group-hover:bg-primary transition-all duration-300 shadow-xl shadow-secondary/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCourseClick(course);
+                  }}
                 >
                   Enroll Now <ChevronRight size={18} />
                 </button>
@@ -212,7 +269,7 @@ const Courses: React.FC = () => {
               <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-8">
                 <Zap size={40} className="text-primary animate-pulse" />
               </div>
-              <h3 className="text-2xl font-black mb-4 tracking-tighter">Cohort 14 Enrollment</h3>
+              <h3 className="text-2xl font-black mb-4 tracking-tighter uppercase">Cohort 14 Enrollment</h3>
               <p className="text-slate-400 text-sm font-medium mb-10 leading-relaxed">Our Launchpad spots are strictly limited to ensure placement focus. Currently 4 slots remaining.</p>
               <button className="bg-primary py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all">Join Waitlist</button>
             </div>

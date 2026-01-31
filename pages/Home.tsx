@@ -27,6 +27,8 @@ const FAQItem = ({ question, answer }: { question: string, answer: string }) => 
 };
 
 const Home: React.FC = () => {
+  const partners = ['Google', 'Meta', 'Amazon', 'Microsoft', 'Netflix', 'OpenAI', 'NVIDIA', 'Salesforce'];
+
   return (
     <div className="pt-16 overflow-hidden">
       {/* Hero Section */}
@@ -84,14 +86,25 @@ const Home: React.FC = () => {
 
       {/* Hiring Partners Ticker */}
       <section className="py-12 border-y border-slate-100 bg-white">
-        <div className="max-w-7xl mx-auto px-4 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4">
           <p className="text-center text-[11px] font-bold text-slate-400 uppercase tracking-[0.3em] mb-10">Our Grads Work At</p>
-          <div className="flex flex-wrap justify-center gap-8 md:gap-16 opacity-30 grayscale hover:grayscale-0 transition-all duration-700">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="flex items-center gap-2 font-black text-2xl">
-                <Building2 size={24} /> <span>BRAND_{i}</span>
-              </div>
-            ))}
+          <div className="w-full inline-flex flex-nowrap overflow-hidden [mask-image:_linear-gradient(to_right,transparent_0,_black_10%,_black_90%,transparent_100%)]">
+            <div className="flex items-center justify-center md:justify-start animate-scroll">
+              {partners.map((partner, index) => (
+                <div key={index} className="flex items-center gap-3 text-2xl font-black text-slate-400 whitespace-nowrap mx-8">
+                  <Building2 size={24} />
+                  <span>{partner}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-center md:justify-start animate-scroll" aria-hidden="true">
+              {partners.map((partner, index) => (
+                <div key={index} className="flex items-center gap-3 text-2xl font-black text-slate-400 whitespace-nowrap mx-8">
+                  <Building2 size={24} />
+                  <span>{partner}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

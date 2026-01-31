@@ -18,10 +18,11 @@ const Login: React.FC = () => {
       // Logic to detect admin for demo purposes
       const role = email.includes('admin') ? 'admin' : 'student';
       login(email, role);
+      navigate('/dashboard');
     } else {
       signup(name, email);
+      navigate('/courses');
     }
-    navigate('/courses');
   };
 
   return (

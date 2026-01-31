@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Menu, X, Rocket, User as UserIcon, LogOut, ChevronRight, LayoutDashboard, ShieldCheck } from 'lucide-react';
+import { Menu, X, Rocket, User as UserIcon, LogOut, LayoutDashboard, ShieldCheck } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const { isAuthenticated, user, logout, canAccessLMS, isAdmin } = useAuth();
@@ -32,7 +32,7 @@ const Navbar: React.FC = () => {
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${
-      scrolled ? 'bg-white/80 backdrop-blur-xl border-b border-slate-100 shadow-sm py-3' : 'bg-transparent py-5'
+      scrolled ? 'bg-white shadow-sm py-3 border-b border-slate-100' : 'bg-transparent py-5'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
@@ -103,64 +103,59 @@ const Navbar: React.FC = () => {
 
           {/* Mobile menu button */}
           <div className="md:hidden">
-            <button onClick={() => setIsOpen(!isOpen)} className="text-secondary p-2 z-50">
+            <button onClick={() => setIsOpen(!isOpen)} className="text-secondary p-2 z-[120] relative">
               {isOpen ? <X size={28} /> : <Menu size={28} />}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu Overlay - Fully Opaque White Background */}
       {isOpen && (
-        <div className="md:hidden fixed inset-0 top-0 bg-white z-[99] p-6 flex flex-col gap-6 animate-in slide-in-from-right duration-300">
-          <div className="flex justify-between items-center mb-8 pt-4">
-             <Link to="/" onClick={() => setIsOpen(false)} className="flex items-center gap-2 group">
-                <div className="bg-primary text-white p-2 rounded-xl">
-                  <Rocket size={22} />
-                </div>
-                <span className="text-secondary font-extrabold text-xl tracking-tighter">Skill Circuit</span>
-              </Link>
-              <button onClick={() => setIsOpen(false)} className="text-secondary p-2"><X size={28}/></button>
-          </div>
-          <div className="flex flex-col gap-4">
+        <div className="md:hidden fixed inset-0 bg-white z-[110] p-6 pt-24 flex flex-col gap-8 animate-in slide-in-from-right duration-300 shadow-2xl overflow-y-auto">
+          <div className="flex flex-col gap-6">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
                 onClick={() => setIsOpen(false)}
-                className={`text-2xl font-black ${location.pathname === link.path ? 'text-primary' : 'text-secondary'}`}
+                className={`text-3xl font-black transition-colors ${
+                  location.pathname === link.path ? 'text-primary' : 'text-secondary hover:text-primary'
+                }`}
               >
                 {link.name}
               </Link>
             ))}
           </div>
           
-          <div className="mt-auto pb-12 border-t border-slate-100 pt-8">
+          <div className="mt-auto pb-12 border-t border-slate-100 pt-10">
             {isAuthenticated ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center"><UserIcon /></div>
-                  <div>
-                    <p className="font-bold text-lg">{user?.name}</p>
-                    <p className="text-sm text-slate-500">{user?.email}</p>
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl">
+                  <div className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center font-bold text-xl">
+                    {user?.name?.[0]}
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="font-black text-lg text-secondary truncate">{user?.name}</p>
+                    <p className="text-sm text-slate-500 truncate">{user?.email}</p>
                   </div>
                 </div>
                 {canAccessLMS && (
-                  <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block w-full text-center bg-secondary text-white py-4 rounded-2xl font-bold">
-                    Go to Dashboard
+                  <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block w-full text-center bg-secondary text-white py-5 rounded-2xl font-black text-lg">
+                    LMS Dashboard
                   </Link>
                 )}
                 {isAdmin && (
-                  <Link to="/admin" onClick={() => setIsOpen(false)} className="block w-full text-center border-2 border-accent text-accent py-4 rounded-2xl font-bold">
-                    Admin Panel
+                  <Link to="/admin" onClick={() => setIsOpen(false)} className="block w-full text-center border-2 border-accent text-accent py-5 rounded-2xl font-black text-lg">
+                    Admin Command Center
                   </Link>
                 )}
-                <button onClick={handleLogout} className="w-full py-4 text-red-500 font-bold">Sign out</button>
+                <button onClick={handleLogout} className="w-full py-4 text-red-500 font-black text-lg uppercase tracking-widest">Sign out</button>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                <Link to="/login" onClick={() => setIsOpen(false)} className="w-full text-center py-4 rounded-2xl border-2 border-slate-100 font-bold">Sign in</Link>
-                <Link to="/courses" onClick={() => setIsOpen(false)} className="w-full text-center bg-primary text-white py-4 rounded-2xl font-bold shadow-lg shadow-primary/20">Get Started</Link>
+                <Link to="/login" onClick={() => setIsOpen(false)} className="w-full text-center py-5 rounded-2xl border-2 border-slate-100 font-black text-lg text-secondary">Sign in</Link>
+                <Link to="/courses" onClick={() => setIsOpen(false)} className="w-full text-center bg-primary text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-primary/20">Get Started</Link>
               </div>
             )}
           </div>

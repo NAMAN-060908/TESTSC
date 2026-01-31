@@ -5,17 +5,25 @@ import { Navigate } from 'react-router-dom';
 import { 
   BarChart3, Users, DollarSign, TrendingUp, Search, 
   MoreVertical, Filter, Download, ArrowUpRight, ArrowDownRight,
-  Database, GraduationCap, Mail, Plus, Trash2, X, Check, Edit2, ExternalLink
+  Database, GraduationCap, Mail, Plus, Trash2, X, Check, Edit2, Edit3
 } from 'lucide-react';
 import { Course, FacultyMember, ProgramTier } from '../types';
 
 const AdminDashboard: React.FC = () => {
-  const { isAuthenticated, isAdmin, courses, faculty, leads, students, addCourse, addFaculty } = useAuth();
+  const { 
+    isAuthenticated, isAdmin, courses, faculty, leads, students, 
+    addCourse, addFaculty, updateFaculty, deleteFaculty 
+  } = useAuth();
+  
   const [activeTab, setActiveTab] = useState<'analytics' | 'cms' | 'faculty' | 'leads' | 'students'>('analytics');
+  
+  // Modals State
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [showAddFaculty, setShowAddFaculty] = useState(false);
+  const [showEditFaculty, setShowEditFaculty] = useState(false);
+  const [editingFaculty, setEditingFaculty] = useState<FacultyMember | null>(null);
 
-  // Modal forms states
+  // Forms State
   const [newCourse, setNewCourse] = useState<Omit<Course, 'id'>>({
     title: '', description: '', duration: '', tier: ProgramTier.NANO, outcomes: [], image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop', price: 0
   });
@@ -25,37 +33,25 @@ const AdminDashboard: React.FC = () => {
 
   if (!isAuthenticated || !isAdmin) return <Navigate to="/" />;
 
-  // Export as CSV (Excel compatible)
+  // Excel compatible CSV Export
   const handleExport = () => {
-    let csvContent = "data:text/csv;charset=utf-8,";
+    const headers = ["Category", "Name/Title", "Email/ID", "Details/Tier", "Joined Date/Progress"];
+    const rows: string[][] = [];
     
-    // Header
-    csvContent += "Type,Name,Email,Info/Tier,Date/Progress\r\n";
-    
-    // Courses
-    courses.forEach(c => {
-      csvContent += `Course,${c.title},N/A,${c.tier},${c.duration}\r\n`;
-    });
-    
-    // Faculty
-    faculty.forEach(f => {
-      csvContent += `Faculty,${f.name},${f.email},${f.specialty},${f.joinedDate}\r\n`;
-    });
-    
-    // Leads
-    leads.forEach(l => {
-      csvContent += `Lead,${l.name},${l.email},"${l.message.replace(/"/g, '""')}",${l.date}\r\n`;
-    });
+    courses.forEach(c => rows.push(["Course", c.title, c.id, c.tier, c.duration]));
+    faculty.forEach(f => rows.push(["Faculty Member", f.name, f.email, f.specialty, f.joinedDate]));
+    leads.forEach(l => rows.push(["Lead Submission", l.name, l.email, `"${l.message.replace(/"/g, '""')}"`, l.date]));
+    students.forEach(s => rows.push(["Student User", s.name, s.email, s.enrolledProgram || "None", `${s.progress || 0}%`]));
 
-    // Students
-    students.forEach(s => {
-      csvContent += `Student,${s.name},${s.email},${s.enrolledProgram || 'None'},${s.progress}%\r\n`;
-    });
+    const csvContent = "\uFEFF" + [headers, ...rows].map(row => 
+      row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(",")
+    ).join("\n");
 
-    const encodedUri = encodeURI(csvContent);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `skill_circuit_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `SkillCircuit_Platform_Export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -78,12 +74,31 @@ const AdminDashboard: React.FC = () => {
     setNewFaculty({ name: '', email: '', specialty: '' });
     setShowAddFaculty(false);
   };
+  
+  const handleUpdateFaculty = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFaculty) return;
+    updateFaculty(editingFaculty);
+    setShowEditFaculty(false);
+    setEditingFaculty(null);
+  }
+
+  const handleDeleteFaculty = (facultyId: string) => {
+    if (window.confirm('Are you sure you want to remove this faculty member? This action cannot be undone.')) {
+      deleteFaculty(facultyId);
+    }
+  }
+
+  const openEditFacultyModal = (fac: FacultyMember) => {
+    setEditingFaculty(fac);
+    setShowEditFaculty(true);
+  }
 
   const stats = [
     { label: 'Total Revenue', val: '$142,400', trend: '+12.5%', isUp: true, icon: DollarSign },
-    { label: 'Active Students', val: students.length, trend: '+4.2%', isUp: true, icon: Users },
+    { label: 'Registered Students', val: students.length, trend: '+4.2%', isUp: true, icon: Users },
     { label: 'Course Completion', val: '74%', trend: '-1.5%', isUp: false, icon: BarChart3 },
-    { label: 'Active Leads', val: leads.filter(l => l.status === 'new').length, trend: '+0.5%', isUp: true, icon: Mail },
+    { label: 'Unread Leads', val: leads.filter(l => l.status === 'new').length, trend: '+0.5%', isUp: true, icon: Mail },
   ];
 
   return (
@@ -92,43 +107,57 @@ const AdminDashboard: React.FC = () => {
         
         {/* Modals */}
         {showAddCourse && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-secondary/80 backdrop-blur-sm p-4">
-            <div className="bg-white w-full max-w-lg rounded-[40px] p-10 animate-in zoom-in-95 shadow-2xl">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-secondary/90 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-lg rounded-[40px] p-10 animate-in zoom-in-95 shadow-2xl overflow-hidden relative">
               <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-black text-secondary">New Circuit Course</h3>
-                <button onClick={() => setShowAddCourse(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X /></button>
+                <h3 className="text-2xl font-black text-secondary uppercase tracking-tight">Create New Circuit</h3>
+                <button onClick={() => setShowAddCourse(false)} className="p-3 hover:bg-slate-100 rounded-full transition-colors"><X size={24}/></button>
               </div>
-              <form onSubmit={submitCourse} className="space-y-4">
-                <input required value={newCourse.title} onChange={e => setNewCourse({...newCourse, title: e.target.value})} placeholder="Course Title" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all" />
-                <textarea required value={newCourse.description} onChange={e => setNewCourse({...newCourse, description: e.target.value})} placeholder="Description" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all min-h-[100px]" />
+              <form onSubmit={submitCourse} className="space-y-5">
+                <input required value={newCourse.title} onChange={e => setNewCourse({...newCourse, title: e.target.value})} placeholder="Circuit Title" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm font-bold" />
+                <textarea required value={newCourse.description} onChange={e => setNewCourse({...newCourse, description: e.target.value})} placeholder="Summary" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm font-medium min-h-[100px]" />
                 <div className="grid grid-cols-2 gap-4">
-                  <input required value={newCourse.duration} onChange={e => setNewCourse({...newCourse, duration: e.target.value})} placeholder="Duration (e.g. 4 Hours)" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all" />
-                  <input type="number" required value={newCourse.price} onChange={e => setNewCourse({...newCourse, price: parseInt(e.target.value)})} placeholder="Price" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all" />
+                  <input required value={newCourse.duration} onChange={e => setNewCourse({...newCourse, duration: e.target.value})} placeholder="e.g. 6 Hours" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm" />
+                  <input type="number" required value={newCourse.price} onChange={e => setNewCourse({...newCourse, price: parseInt(e.target.value) || 0})} placeholder="e.g. 99" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Program Tier</label>
-                  <select value={newCourse.tier} onChange={e => setNewCourse({...newCourse, tier: e.target.value as ProgramTier})} className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all">
-                    {Object.values(ProgramTier).map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <button type="submit" className="w-full bg-primary text-white py-5 rounded-2xl font-black text-lg hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 mt-4">Add to Platform</button>
+                <select value={newCourse.tier} onChange={e => setNewCourse({...newCourse, tier: e.target.value as ProgramTier})} className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm font-bold">
+                  {Object.values(ProgramTier).map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button type="submit" className="w-full bg-primary text-white py-5 rounded-2xl font-black text-lg hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 mt-4 uppercase">Publish Circuit</button>
               </form>
             </div>
           </div>
         )}
-
+        
         {showAddFaculty && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-secondary/80 backdrop-blur-sm p-4">
-            <div className="bg-white w-full max-w-lg rounded-[40px] p-10 animate-in zoom-in-95 shadow-2xl">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-secondary/90 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-lg rounded-[40px] p-10 animate-in zoom-in-95 shadow-2xl relative">
               <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-black text-secondary">Recruit Faculty</h3>
-                <button onClick={() => setShowAddFaculty(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X /></button>
+                <h3 className="text-2xl font-black text-secondary uppercase tracking-tight">Onboard Faculty</h3>
+                <button onClick={() => setShowAddFaculty(false)} className="p-3 hover:bg-slate-100 rounded-full transition-colors"><X size={24}/></button>
               </div>
-              <form onSubmit={submitFaculty} className="space-y-4">
-                <input required value={newFaculty.name} onChange={e => setNewFaculty({...newFaculty, name: e.target.value})} placeholder="Full Name" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all" />
-                <input type="email" required value={newFaculty.email} onChange={e => setNewFaculty({...newFaculty, email: e.target.value})} placeholder="Email" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all" />
-                <input required value={newFaculty.specialty} onChange={e => setNewFaculty({...newFaculty, specialty: e.target.value})} placeholder="Specialty (e.g. UX Arch)" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary transition-all" />
-                <button type="submit" className="w-full bg-primary text-white py-5 rounded-2xl font-black text-lg hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 mt-4">Send Offer</button>
+              <form onSubmit={submitFaculty} className="space-y-5">
+                <input required value={newFaculty.name} onChange={e => setNewFaculty({...newFaculty, name: e.target.value})} placeholder="Full Name" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm font-bold" />
+                <input type="email" required value={newFaculty.email} onChange={e => setNewFaculty({...newFaculty, email: e.target.value})} placeholder="Institutional Email" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm" />
+                <input required value={newFaculty.specialty} onChange={e => setNewFaculty({...newFaculty, specialty: e.target.value})} placeholder="Core Specialty" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm font-bold" />
+                <button type="submit" className="w-full bg-primary text-white py-5 rounded-2xl font-black text-lg hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 mt-4 uppercase">Confirm Enrollment</button>
+              </form>
+            </div>
+          </div>
+        )}
+        
+        {showEditFaculty && editingFaculty && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-secondary/90 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-lg rounded-[40px] p-10 animate-in zoom-in-95 shadow-2xl relative">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-black text-secondary uppercase tracking-tight">Edit Faculty Profile</h3>
+                <button onClick={() => setShowEditFaculty(false)} className="p-3 hover:bg-slate-100 rounded-full transition-colors"><X size={24}/></button>
+              </div>
+              <form onSubmit={handleUpdateFaculty} className="space-y-5">
+                <input required value={editingFaculty.name} onChange={e => setEditingFaculty({...editingFaculty, name: e.target.value})} placeholder="Full Name" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm font-bold" />
+                <input type="email" required value={editingFaculty.email} onChange={e => setEditingFaculty({...editingFaculty, email: e.target.value})} placeholder="Institutional Email" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm" />
+                <input required value={editingFaculty.specialty} onChange={e => setEditingFaculty({...editingFaculty, specialty: e.target.value})} placeholder="Core Specialty" className="w-full bg-slate-50 p-4 rounded-2xl outline-none border border-transparent focus:border-primary focus:bg-white transition-all text-sm font-bold" />
+                <button type="submit" className="w-full bg-accent text-white py-5 rounded-2xl font-black text-lg hover:bg-amber-500 transition-all shadow-xl shadow-accent/20 mt-4 uppercase">Save Changes</button>
               </form>
             </div>
           </div>
@@ -137,228 +166,160 @@ const AdminDashboard: React.FC = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
           <div>
-            <h1 className="text-4xl font-black text-secondary tracking-tighter mb-2 uppercase">Circuit OS Admin</h1>
-            <p className="text-slate-500 font-medium">Control center for all platform operations.</p>
+            <h1 className="text-4xl font-black text-secondary tracking-tighter mb-2 uppercase">Circuit OS Command</h1>
+            <p className="text-slate-500 font-medium">Enterprise Management Hub • Live Platform Sync</p>
           </div>
           <div className="flex gap-4">
-            <button onClick={handleExport} className="bg-white border border-slate-200 text-secondary px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50 transition-all">
-              <Download size={18} /> Export Data (Excel)
-            </button>
-            <button onClick={() => setShowAddCourse(true)} className="bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-primary/20">
-              New Course
+            <button onClick={handleExport} className="bg-white border border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all">
+              <Download size={16} /> Export All Data
             </button>
           </div>
         </div>
 
-        {/* Tabs Nav */}
-        <div className="flex gap-4 mb-10 border-b border-slate-100 overflow-x-auto no-scrollbar pb-2">
-          {[
-            { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-            { id: 'cms', label: 'CMS / Courses', icon: Database },
-            { id: 'faculty', label: 'Faculty', icon: GraduationCap },
-            { id: 'leads', label: 'Incoming Leads', icon: Mail },
-            { id: 'students', label: 'Students', icon: Users },
-          ].map(tab => (
-            <button 
-              key={tab.id} 
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${
-                activeTab === tab.id ? 'bg-secondary text-white shadow-lg' : 'text-slate-400 hover:text-secondary'
-              }`}
-            >
-              <tab.icon size={18} /> {tab.label}
-            </button>
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+          {stats.map(stat => (
+            <div key={stat.label} className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{stat.label}</p>
+                <div className="bg-slate-50 p-2 rounded-lg text-slate-500"><stat.icon size={16}/></div>
+              </div>
+              <p className="text-4xl font-black text-secondary tracking-tighter mb-2">{stat.val}</p>
+              <div className={`flex items-center gap-1 font-bold text-xs ${stat.isUp ? 'text-green-500' : 'text-red-500'}`}>
+                {stat.isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />} {stat.trend} vs last month
+              </div>
+            </div>
           ))}
         </div>
 
-        {activeTab === 'analytics' && (
-          <div className="animate-in fade-in duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-              {stats.map((stat, i) => (
-                <div key={i} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="p-3 rounded-2xl bg-slate-50 text-secondary"><stat.icon size={24} /></div>
-                    <div className={`flex items-center gap-1 text-xs font-black ${stat.isUp ? 'text-green-500' : 'text-red-500'}`}>
-                      {stat.trend} {stat.isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                    </div>
-                  </div>
-                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">{stat.label}</p>
-                  <p className="text-3xl font-black text-secondary">{stat.val}</p>
-                </div>
-              ))}
-            </div>
-            
-            <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden p-8">
-              <h3 className="text-xl font-black text-secondary mb-6">Platform Performance Metrics</h3>
-              <div className="aspect-[21/9] bg-slate-50 rounded-[30px] flex items-center justify-center text-slate-300 font-bold italic">
-                Platform graph visualizations would render here.
+        {/* Navigation & Content Area */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 sticky top-24">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 px-4">Management Areas</h3>
+              <div className="space-y-2">
+                {[
+                  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+                  { id: 'cms', label: 'Course CMS', icon: Database },
+                  { id: 'faculty', label: 'Faculty Roster', icon: GraduationCap },
+                  { id: 'leads', label: 'Admissions Leads', icon: Mail },
+                  { id: 'students', label: 'Student Database', icon: Users },
+                ].map(tab => (
+                  <button 
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-left ${
+                      activeTab === tab.id ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <tab.icon size={18} /> {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
-        )}
 
-        {activeTab === 'cms' && (
-          <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-2xl font-black text-secondary">Active Circuits</h3>
-              <p className="text-sm text-slate-400 font-medium">Showing {courses.length} courses</p>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {courses.map(course => (
-                <div key={course.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex gap-6 hover:shadow-xl transition-shadow group">
-                  <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0">
-                    <img src={course.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 min-h-[600px]">
+              {/* Conditional Content */}
+              {activeTab === 'cms' && (
+                <div>
+                  <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-2xl font-black text-secondary">Course CMS ({courses.length})</h2>
+                    <button onClick={() => setShowAddCourse(true)} className="bg-primary text-white px-5 py-3 rounded-2xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest"><Plus size={16}/> New Course</button>
                   </div>
-                  <div className="flex-grow">
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-lg text-secondary">{course.title}</h4>
-                      <span className="text-[10px] font-black bg-primary/10 text-primary px-2 py-0.5 rounded-md uppercase tracking-wider">{course.tier}</span>
-                    </div>
-                    <p className="text-slate-400 text-xs mt-1 leading-relaxed line-clamp-2">{course.description}</p>
-                    <div className="mt-4 flex gap-2">
-                       <button className="text-[10px] font-black uppercase tracking-widest bg-slate-100 text-secondary px-4 py-2 rounded-xl hover:bg-slate-200 transition-colors flex items-center gap-1">
-                        <Edit2 size={12}/> Edit
-                       </button>
-                       <button className="text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors flex items-center gap-1">
-                        <Trash2 size={12} /> Delete
-                       </button>
-                    </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100">
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Title</th>
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Tier</th>
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Price</th>
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {courses.map(c => (
+                          <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="p-4 font-bold text-secondary">{c.title}</td>
+                            <td className="p-4"><span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold">{c.tier}</span></td>
+                            <td className="p-4 font-bold">${c.price}</td>
+                            <td className="p-4 text-slate-400"><MoreVertical /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'faculty' && (
-          <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden animate-in fade-in duration-300">
-             <div className="p-8 border-b border-slate-100 flex justify-between items-center">
-                <h3 className="text-xl font-black text-secondary">Expert Faculty</h3>
-                <button onClick={() => setShowAddFaculty(true)} className="bg-secondary text-white px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-secondary-dark transition-all"><Plus size={14}/> Add Faculty</button>
-             </div>
-             <div className="overflow-x-auto">
-               <table className="w-full text-left">
-                  <thead className="bg-slate-50/50">
-                    <tr>
-                      {['Name', 'Email', 'Specialty', 'Joined', 'Actions'].map(h => <th key={h} className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {faculty.map(f => (
-                      <tr key={f.id} className="hover:bg-slate-50/30 transition-colors">
-                        <td className="px-8 py-5 text-sm font-bold text-secondary">{f.name}</td>
-                        <td className="px-8 py-5 text-sm text-slate-500">{f.email}</td>
-                        <td className="px-8 py-5 text-sm font-medium text-primary uppercase tracking-wide text-xs">{f.specialty}</td>
-                        <td className="px-8 py-5 text-xs text-slate-400">{f.joinedDate}</td>
-                        <td className="px-8 py-5 text-right">
-                          <button className="text-slate-300 hover:text-secondary"><MoreVertical size={18} /></button>
-                        </td>
-                      </tr>
-                    ))}
-                    {faculty.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="p-20 text-center text-slate-300 font-bold uppercase tracking-widest">No faculty found</td>
-                      </tr>
-                    )}
-                  </tbody>
-               </table>
-             </div>
-          </div>
-        )}
-
-        {activeTab === 'leads' && (
-          <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden animate-in fade-in duration-300">
-            <div className="p-8 border-b border-slate-100">
-              <h3 className="text-xl font-black text-secondary">Incoming Leads (Inbox)</h3>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {leads.map(lead => (
-                <div key={lead.id} className="p-8 hover:bg-slate-50 transition-colors group">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">{lead.name[0]}</div>
-                      <div>
-                        <p className="font-bold text-secondary">{lead.name}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">{lead.email} • {lead.date}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                       <button className="p-2 bg-green-50 text-green-500 rounded-lg hover:bg-green-100 opacity-0 group-hover:opacity-100 transition-all"><Check size={16} /></button>
-                       <button className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-all"><X size={16} /></button>
-                    </div>
+              )}
+              {activeTab === 'faculty' && (
+                <div>
+                  <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-2xl font-black text-secondary">Faculty Roster ({faculty.length})</h2>
+                    <button onClick={() => setShowAddFaculty(true)} className="bg-primary text-white px-5 py-3 rounded-2xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest"><Plus size={16}/> Add Faculty</button>
                   </div>
-                  <p className="text-slate-500 text-sm mt-4 leading-relaxed bg-slate-50/50 p-4 rounded-2xl italic font-medium">"{lead.message}"</p>
+                   <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100">
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Name</th>
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Specialty</th>
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Joined</th>
+                          <th className="text-left p-4 font-black uppercase text-[10px] text-slate-400 tracking-widest">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {faculty.map(f => (
+                          <tr key={f.id} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="p-4">
+                              <p className="font-bold text-secondary">{f.name}</p>
+                              <p className="text-xs text-slate-400">{f.email}</p>
+                            </td>
+                            <td className="p-4 font-medium text-slate-500">{f.specialty}</td>
+                            <td className="p-4 font-medium text-slate-500">{f.joinedDate}</td>
+                            <td className="p-4">
+                              <div className="flex gap-2">
+                                <button onClick={() => openEditFacultyModal(f)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500 hover:text-accent transition-colors"><Edit2 size={14} /></button>
+                                <button onClick={() => handleDeleteFaculty(f.id)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              ))}
-              {leads.length === 0 && <div className="p-20 text-center text-slate-300 font-bold">No leads found.</div>}
+              )}
+              {activeTab === 'leads' && (
+                <div>
+                  <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-2xl font-black text-secondary">Admissions Leads ({leads.length})</h2>
+                  </div>
+                   <div className="space-y-4">
+                     {leads.map(lead => (
+                       <div key={lead.id} className="bg-slate-50/70 p-6 rounded-2xl border border-slate-100">
+                          <div className="flex justify-between items-start">
+                             <div>
+                               <p className="font-bold text-secondary">{lead.name} <span className="text-slate-400 font-medium text-sm ml-2">{lead.email}</span></p>
+                               <p className="text-xs text-slate-400 mt-1">{new Date(lead.date).toLocaleString()}</p>
+                             </div>
+                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                               lead.status === 'new' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'
+                             }`}>{lead.status}</span>
+                          </div>
+                          <p className="mt-4 text-sm text-slate-500 italic">"{lead.message}"</p>
+                       </div>
+                     ))}
+                   </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
-
-        {activeTab === 'students' && (
-          <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden animate-in slide-in-from-right-4 duration-300">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-black text-secondary">Registered Students</h3>
-                <p className="text-sm text-slate-400 font-medium mt-1">Platform-wide login and enrollment data</p>
-              </div>
-              <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl">
-                 <Users size={18} className="text-slate-400" />
-                 <span className="text-sm font-black text-secondary">{students.length} Total</span>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50/50">
-                  <tr>
-                    {['Student', 'Email', 'Enrollment', 'Progress', 'Status'].map(h => <th key={h} className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {students.map(s => (
-                    <tr key={s.id} className="hover:bg-slate-50/30 transition-colors">
-                      <td className="px-8 py-5">
-                        <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold text-xs">{s.name[0]}</div>
-                           <span className="text-sm font-bold text-secondary">{s.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-8 py-5 text-sm text-slate-500 font-medium">{s.email}</td>
-                      <td className="px-8 py-5">
-                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${s.enrolledProgram ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-400'}`}>
-                          {s.enrolledProgram || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5">
-                        <div className="flex items-center gap-2">
-                           <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="bg-primary h-full" style={{ width: `${s.progress}%` }}></div>
-                           </div>
-                           <span className="text-[10px] font-bold text-slate-400">{s.progress}%</span>
-                        </div>
-                      </td>
-                      <td className="px-8 py-5">
-                        <div className="flex items-center gap-1.5">
-                           <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                           <span className="text-[10px] font-black uppercase text-slate-400">Online</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {students.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="p-20 text-center text-slate-300 font-bold uppercase tracking-widest">No students found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
+        </div>
       </div>
     </div>
   );
 };
 
+// FIX: Add default export
 export default AdminDashboard;

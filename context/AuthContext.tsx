@@ -11,6 +11,8 @@ interface AuthContextType extends AuthState {
   addLead: (lead: Omit<Lead, 'id' | 'date' | 'status'>) => void;
   addCourse: (course: Course) => void;
   addFaculty: (faculty: FacultyMember) => void;
+  updateFaculty: (updatedFaculty: FacultyMember) => void;
+  deleteFaculty: (facultyId: string) => void;
   courses: Course[];
   faculty: FacultyMember[];
   leads: Lead[];
@@ -123,6 +125,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setFaculty(prev => [...prev, fac]);
   };
 
+  const updateFaculty = (updatedFaculty: FacultyMember) => {
+    setFaculty(prev => prev.map(f => f.id === updatedFaculty.id ? updatedFaculty : f));
+  };
+
+  const deleteFaculty = (facultyId: string) => {
+    setFaculty(prev => prev.filter(f => f.id !== facultyId));
+  };
+
   const isAdmin = authState.user?.role === 'admin';
   const isFaculty = authState.user?.role === 'faculty';
 
@@ -143,6 +153,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addLead, 
       addCourse, 
       addFaculty,
+      updateFaculty,
+      deleteFaculty,
       courses, 
       faculty, 
       leads, 
